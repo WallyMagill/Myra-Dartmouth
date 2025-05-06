@@ -1,0 +1,134 @@
+// This is your Prisma schema file
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ATHLETE
+  COACH
+  ADMIN
+}
+
+enum TestType {
+  TREADMILL
+  SKI_ERG
+  BIKE_ERG
+}
+
+enum CoachAthleteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          UserRole  @default(ATHLETE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Athlete specific fields
+  height        Float?    // in cm
+  weight        Float?    // in kg
+  dateOfBirth   DateTime?
+  gender        String?
+  
+  // Relations
+  athleteTests      TestSession[]  @relation("AthleteTests")
+  conductedTests    TestSession[]  @relation("ConductedTests")
+  coachAthletes     CoachAthlete[] @relation("CoachToAthlete")
+  athleteCoaches    CoachAthlete[] @relation("AthleteToCoach")
+  createdProtocols  TestProtocol[] @relation("CreatedProtocols")
+  createdSchedules  Schedule[]     @relation("CreatedSchedules")
+}
+
+model CoachAthlete {
+  id        String   @id @default(cuid())
+  coachId   String
+  athleteId String
+  createdAt DateTime @default(now())
+  status    CoachAthleteStatus @default(PENDING)
+  
+  coach     User     @relation("CoachToAthlete", fields: [coachId], references: [id])
+  athlete   User     @relation("AthleteToCoach", fields: [athleteId], references: [id])
+
+  @@unique([coachId, athleteId])
+}
+
+model TestProtocol {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  testType    TestType
+  stages      Json       // Array of stage configurations
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   String
+  creator     User       @relation("CreatedProtocols", fields: [createdBy], references: [id])
+  sessions    TestSession[]
+}
+
+model TestSession {
+  id            String      @id @default(cuid())
+  date          DateTime
+  notes         String?
+  protocolId    String
+  athleteId     String
+  conductedById String
+  data          Json        // Test data including lactate, heart rate, etc.
+  status        TestStatus  @default(SCHEDULED)
+  feedback      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  protocol      TestProtocol @relation(fields: [protocolId], references: [id])
+  athlete       User        @relation("AthleteTests", fields: [athleteId], references: [id])
+  conductedBy   User        @relation("ConductedTests", fields: [conductedById], references: [id])
+  schedule      Schedule?   @relation(fields: [scheduleId], references: [id])
+  scheduleId    String?     @unique
+}
+
+enum TestStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Schedule {
+  id          String    @id @default(cuid())
+  startTime   DateTime
+  endTime     DateTime
+  title       String
+  description String?
+  location    String?
+  type        ScheduleType @default(TEST_SESSION)
+  status      ScheduleStatus @default(ACTIVE)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator     User      @relation("CreatedSchedules", fields: [createdBy], references: [id])
+  testSession TestSession?
+}
+
+enum ScheduleType {
+  TEST_SESSION
+  MEETING
+  TRAINING
+  OTHER
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+} 
